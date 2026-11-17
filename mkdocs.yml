@@ -1,0 +1,11 @@
+site_name: Zorek
+site_description: Keeps every zrok tunnel from a shares.json config running, on PC and Android.
+repo_url: https://github.com/mon231/com.rel.zorek
+theme:
+  name: material
+  features: [navigation.sections, content.code.copy]
+nav:
+  - Home: index.md
+  - Config: config.md
+  - Android: android.md
+  - Development: development.md
