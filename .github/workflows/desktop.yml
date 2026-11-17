@@ -27,8 +27,8 @@ jobs:
       - name: Backend tests
         run: python tests/test_core.py
 
-      - name: Build single-file executable
-        run: pyinstaller desktop/app.py --onefile --name zorek --paths backend --collect-all openziti
+      - name: Build single-file executable (GUI)
+        run: pyinstaller desktop/app.py --onefile --noconsole --name zorek --paths backend --collect-all openziti
 
       - uses: actions/upload-artifact@v4
         with:

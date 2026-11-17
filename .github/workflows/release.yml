@@ -1,10 +1,19 @@
 name: Release
+# Tag `v*` (or run manually with a version) builds everything and creates a DRAFT release: review and publish it on GitHub.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release tag, e.g. v0.1.0 (created when the draft is published)'
+        required: true
 
 permissions:
   contents: write
+
+env:
+  TAG: ${{ inputs.version || github.ref_name }}
 
 jobs:
   desktop:
@@ -31,7 +40,7 @@ jobs:
       - name: Backend tests
         run: python tests/test_core.py
       - name: Build single-file executable
-        run: pyinstaller desktop/app.py --onefile --name zorek --paths backend --collect-all openziti
+        run: pyinstaller desktop/app.py --onefile --noconsole --name zorek --paths backend --collect-all openziti
       - name: Name the asset
         shell: bash
         run: mv "${{ matrix.built }}" "dist/${{ matrix.asset }}"
@@ -67,7 +76,7 @@ jobs:
       - name: Build unsigned release APK
         run: >
           bash ./gradlew assembleRelease
-          -PversionName=${GITHUB_REF_NAME#v}
+          -PversionName=${TAG#v}
           -PversionCode=${{ github.run_number }}
       - name: Sign APK with signapp
         run: |
@@ -76,8 +85,9 @@ jobs:
           export PATH="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1):$PATH"
           mkdir -p ~/.reltools
           unsigned=$(ls app/build/outputs/apk/release/*.apk)
-          signapp -a "$unsigned" -o "zorek-${GITHUB_REF_NAME}.apk"
-          apksigner verify --verbose "zorek-${GITHUB_REF_NAME}.apk"
+          # no -k: signapp signs with its built-in keystore
+          signapp -a "$unsigned" -o "zorek-${TAG}.apk"
+          apksigner verify --verbose "zorek-${TAG}.apk"
       - uses: actions/upload-artifact@v4
         with:
           name: zorek-apk
@@ -92,9 +102,9 @@ jobs:
         with:
           path: assets
           merge-multiple: true
-      - name: Publish release
+      - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
         run: >
-          gh release create "$GITHUB_REF_NAME" assets/*
-          --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
+          gh release create "$TAG" assets/*
+          --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TAG" --generate-notes --draft
