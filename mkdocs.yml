@@ -3,9 +3,30 @@ site_description: Keeps every zrok tunnel from a shares.json config running, on 
 repo_url: https://github.com/mon231/com.rel.zorek
 theme:
   name: material
-  features: [navigation.sections, content.code.copy]
+  features: [navigation.sections, navigation.top, content.code.copy, search.highlight]
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - tables
+  - toc:
+      permalink: true
 nav:
   - Home: index.md
-  - Config: config.md
-  - Android: android.md
+  - Usage:
+      - PC app: pc.md
+      - Android app: android.md
+      - Creating URLs: creating-urls.md
+      - Config reference: config.md
+      - Importing shares files: importing.md
+  - How it works:
+      - Architecture: how-it-works.md
+      - Security: security.md
+  - Troubleshooting: troubleshooting.md
   - Development: development.md

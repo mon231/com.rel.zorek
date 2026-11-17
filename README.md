@@ -1,25 +1,25 @@
 # com.rel.zorek
 
-Keeps every zrok tunnel listed in a `shares.json`-style config running. Same Python backend (`backend/zorek_backend`) on PC and Android; the config file is re-read every 2s (tunnels added/changed/removed live, dead ones restarted).
+Keeps every [zrok](https://zrok.io) tunnel listed in a `shares.json`-style config running, on **PC (GUI)** and
+**Android**. One Python backend (`backend/zorek_backend`) is shared by both; the config is re-read every 2 seconds, so
+tunnels are started, changed, stopped and restarted live.
 
-## Config
-```json
-{
-  "identity": { "...": "contents of ~/.zrok2/identities/environment.json of the PC that created the shares" },
-  "shares": [
-    {"public_token": "74er67ijxyd8", "tunnel_ip": "127.0.0.1", "tunnel_port": 8000},
-    {"public_token": "p9ywvje0ac13", "tunnel_ip": "10.0.0.5", "tunnel_port": 18972, "tunnel_scheme": "https"}
-  ]
-}
+**Documentation: https://mon231.github.io/com.rel.zorek/**
+
+- Create a new public URL from your zrok enable token (GUI button / app form), on the same URL forever.
+- Android: foreground service, Downloads watch that imports `shares_*.json` files (feature flag).
+- Works for local servers and for any `ip:port` on your LAN, `http` or `https` targets.
+
+## Quick start
+
 ```
-A plain list (old `shares.json`) also works on PC where `~/.zrok2` already exists. Shares can only be bound by the zrok environment that created them, hence `identity` on Android.
+pip install openziti
+python desktop/app.py            # GUI, uses ./shares.json
+python desktop/app.py --nogui x.json
+python tests/test_core.py        # backend tests
+```
 
-## PC
-`pip install openziti` then `python desktop/app.py [shares.json]`
+Android: install the APK from the [releases](https://github.com/mon231/com.rel.zorek/releases). Build instructions
+(libziti via the NDK in Docker, Gradle, CI, releases): see the Development page of the docs.
 
-## Android
-1. `docker build -t zorek-native native && docker run --rm -v zorek-work:/work -v "%cd%/native/out:/out" zorek-native` (libziti 1.18.3 for arm64-v8a / armeabi-v7a / x86_64 via the NDK + vcpkg)
-2. `./gradlew assembleDebug` (JDK 17+, e.g. Android Studio's JBR)
-3. Install, edit the config in the app, Save.
-
-Tests: `python tests/test_core.py`
+> `shares.json` and `shares_*.json` contain your zrok token / private key. Never commit or share them.
