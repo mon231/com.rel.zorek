@@ -9,6 +9,7 @@
 
     <application
         android:label="Zorek"
+        android:allowBackup="false"
         android:usesCleartextTraffic="true">
         <activity android:name=".MainActivity" android:exported="true">
             <intent-filter>
