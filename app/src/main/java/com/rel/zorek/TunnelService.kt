@@ -25,7 +25,7 @@ class TunnelService : Service() {
         )
         if (!Python.isStarted()) Python.start(AndroidPlatform(this))
         Python.getInstance().getModule("zorek_backend")
-            .callAttr("start", MainActivity.configFile(this).absolutePath, filesDir.absolutePath)
+            .callAttr("start", MainActivity.configFile(this).absolutePath, filesDir.absolutePath, MainActivity.importDir(this))
         return START_STICKY
     }
 }
