@@ -38,6 +38,13 @@ def entry(tok, port=1, **kw):
     return {"public_token": tok, "tunnel_ip": "127.0.0.1", "tunnel_port": port, **kw}
 
 
+def wait(cond, timeout=10):
+    """Poll until cond() is true (threads start at their own pace, slower on CI runners)."""
+    end = time.time() + timeout
+    while not cond() and time.time() < end:
+        time.sleep(0.02)
+
+
 def dump(path, obj):
     with open(path, "w") as f:
         json.dump(obj, f)
@@ -53,12 +60,12 @@ class T(unittest.TestCase):
         z = Zorek(self.p, ztx)
 
         dump(self.p, [entry("a"), entry("b")])
-        z.sync(); time.sleep(0.2)
+        z.sync(); wait(lambda: len(ztx.bound) == 2)
         self.assertEqual(sorted(ztx.bound), ["a", "b"])
         self.assertEqual({t: s["state"] for t, s in z.status()["tunnels"].items()}, {"a": "running", "b": "running"})
 
         dump(self.p, {"shares": [entry("a", 2)]})  # a changed, b removed
-        z.sync(); time.sleep(0.2)
+        z.sync(); wait(lambda: ztx.bound.count("a") == 2)
         self.assertEqual(sorted(z.tunnels), ["a"])
         self.assertEqual(ztx.bound.count("a"), 2)  # restarted with new spec
         self.assertTrue(z.tunnels["a"].alive)
@@ -113,11 +120,11 @@ class T(unittest.TestCase):
         ztx = FakeZtx()
         z = Zorek(self.p, ztx, import_dir=dl)
         dump(os.path.join(dl, "shares_x.json"), [entry("t1")])
-        z.sync(); time.sleep(0.2)
+        z.sync(); wait(lambda: ztx.bound == ["t1"])
         self.assertEqual(ztx.bound, ["t1"])
         z.set_import_dir(None)  # feature off: new files are ignored
         dump(os.path.join(dl, "shares_y.json"), [entry("t2")])
-        z.sync(); time.sleep(0.2)
+        z.sync(); time.sleep(0.3)  # negative check: give a wrongly started tunnel the time to show up
         self.assertEqual(ztx.bound, ["t1"])
 
 
