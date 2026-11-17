@@ -31,6 +31,7 @@ build() {  # abi triplet
   cmake --build build-$abi --target ziti_dll
   mkdir -p $OUT/$abi
   find build-$abi -name 'libziti.so' -exec cp {} $OUT/$abi/ \;
+  $ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip --strip-unneeded $OUT/$abi/libziti.so
   ls -la $OUT/$abi
 }
 build arm64-v8a   arm64-android
