@@ -55,6 +55,24 @@ class T(unittest.TestCase):
         self.d = tempfile.mkdtemp()
         self.p = os.path.join(self.d, "shares.json")
 
+    def test_blocked_identity_does_not_block_others(self):
+        release = threading.Event()
+        good = FakeZtx()
+
+        class Z(Zorek):
+            def _ztx_for(self, entry, cfg):
+                if entry["public_token"] == "stuck":
+                    release.wait()  # like openziti.load() with a revoked identity
+                return good
+
+        z = Z(self.p)
+        dump(self.p, [entry("stuck"), entry("ok")])
+        z.sync()
+        wait(lambda: z.status()["tunnels"].get("ok", {}).get("state") == "running")
+        st = z.status()["tunnels"]
+        self.assertEqual((st["stuck"]["state"], st["ok"]["state"]), ("connecting", "running"))
+        release.set(); z.stop()
+
     def test_stop(self):
         ztx = FakeZtx()
         z = Zorek(self.p, ztx)
@@ -72,7 +90,7 @@ class T(unittest.TestCase):
         z = Zorek(self.p, ztx)
 
         dump(self.p, [entry("a"), entry("b")])
-        z.sync(); wait(lambda: len(ztx.bound) == 2)
+        z.sync(); wait(lambda: all(t["state"] == "running" for t in z.status()["tunnels"].values()) and len(z.tunnels) == 2)
         self.assertEqual(sorted(ztx.bound), ["a", "b"])
         self.assertEqual({t: s["state"] for t, s in z.status()["tunnels"].items()}, {"a": "running", "b": "running"})
 
