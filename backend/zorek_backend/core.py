@@ -8,6 +8,7 @@ creates a fresh environment (fine only for shares created by that new environmen
 import json
 import os
 import socket
+import sys
 import ssl
 import threading
 import time
@@ -106,22 +107,36 @@ class Tunnel:
         try:
             self.srv = self._ztx.bind(self.entry["public_token"])
             self.srv.listen()
+            self._log("listening")
             while not self.stopped:
-                conn, _ = self.srv.accept()
+                try:
+                    conn, _ = self.srv.accept()
+                except BlockingIOError:  # on Android libziti's listener is non-blocking (blocks on Windows/Linux)
+                    time.sleep(0.05)
+                    continue
+                conn.setblocking(True)
+                self._log("connection")
                 try:
                     local = socket.create_connection((ip, port), timeout=10)
                     if scheme == "https":
                         local = tls.wrap_socket(local, server_hostname=ip)
                     local.settimeout(None)
                 except OSError as e:
-                    self.error = f"cannot reach {ip}:{port}: {e}"
+                    self._fail(f"cannot reach {ip}:{port}: {e}")
                     conn.close()
                     continue
                 threading.Thread(target=_pump, args=(conn, local), daemon=True).start()
                 threading.Thread(target=_pump, args=(local, conn), daemon=True).start()
         except Exception as e:
             if not self.stopped:
-                self.error = repr(e)
+                self._fail(repr(e))
+
+    def _log(self, msg):
+        print(f"tunnel {self.entry['public_token']}: {msg}", file=sys.stderr, flush=True)
+
+    def _fail(self, msg):
+        self.error = msg
+        self._log(msg)
 
 
 class Zorek:
