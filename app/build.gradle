@@ -25,6 +25,7 @@ android {
             jniLibs.srcDir "../native/out"   // libziti.so per ABI, built by native/build_libziti.sh
         }
     }
+    packaging { jniLibs { useLegacyPackaging = true } }  // extract libziti.so so dlopen-by-name finds it
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     kotlinOptions { jvmTarget = '17' }
 }
