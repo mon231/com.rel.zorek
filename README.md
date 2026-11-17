@@ -18,7 +18,7 @@ A plain list (old `shares.json`) also works on PC where `~/.zrok2` already exist
 `pip install openziti` then `python desktop/app.py [shares.json]`
 
 ## Android
-1. `bash native/build_libziti.sh` (libziti 1.18.3 for arm64-v8a / armeabi-v7a / x86_64 via the NDK + vcpkg)
+1. `docker build -t zorek-native native && docker run --rm -v zorek-work:/work -v "%cd%/native/out:/out" zorek-native` (libziti 1.18.3 for arm64-v8a / armeabi-v7a / x86_64 via the NDK + vcpkg)
 2. `./gradlew assembleDebug` (JDK 17+, e.g. Android Studio's JBR)
 3. Install, edit the config in the app, Save.
 

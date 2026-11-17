@@ -6,3 +6,5 @@ native/build.log
 build/
 local.properties
 *.apk
+native/docker-build.log
+native/run.log
