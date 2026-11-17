@@ -1,7 +1,9 @@
 """Keeps every zrok tunnel listed in a shares.json-style config running, and re-syncs when the file changes.
 
-Config: either a list of entries, or {"enable_token": "...", "shares": [entries]} (token needed only on first run;
-falls back to env ZROK2_ENABLE_TOKEN). Entry: {"public_token", "tunnel_ip", "tunnel_port", "tunnel_scheme"?, ...}.
+Config: either a list of entries, or {"identity": {...}, "enable_token": "...", "shares": [entries]}.
+Shares can only be bound by the zrok environment that created them, so on a device without ~/.zrok2 put that PC's
+~/.zrok2/identities/environment.json content in "identity". Without it, "enable_token" (or env ZROK2_ENABLE_TOKEN)
+creates a fresh environment (fine only for shares created by that new environment). Entry: {"public_token", "tunnel_ip", "tunnel_port", "tunnel_scheme"?, ...}.
 """
 import json
 import os
@@ -9,6 +11,7 @@ import socket
 import ssl
 import threading
 import time
+import urllib.request
 
 RETRY_SECONDS = 10
 
@@ -16,10 +19,11 @@ RETRY_SECONDS = 10
 def read_config(path):
     with open(path) as f:
         data = json.load(f)
-    token, entries = (data.get("enable_token"), data["shares"]) if isinstance(data, dict) else (None, data)
-    for e in entries:
+    if isinstance(data, list):
+        data = {"shares": data}
+    for e in data["shares"]:
         e["public_token"], e["tunnel_ip"], e["tunnel_port"]  # KeyError on a malformed entry
-    return token, entries
+    return data
 
 
 def _pump(src, dst):
@@ -35,22 +39,36 @@ def _pump(src, dst):
         dst.close()
 
 
-def _load_ziti(token):
-    """Enable the zrok environment once (from the account token), then return a ziti context."""
-    import openziti
-    from zrok2.environment import root as zroot
-    from zrok2.environment.enable import enable
+def _enable(token, home):
+    """zrok `enable` over plain HTTPS (zrok2's SDK needs pydantic-core, which has no Android build)."""
+    api = os.environ.get("ZROK2_API_ENDPOINT", "https://api-v2.zrok.io").rstrip("/")
+    req = urllib.request.Request(
+        api + "/api/v2/enable",
+        data=json.dumps({"host": socket.gethostname(), "description": "zorek"}).encode(),
+        headers={"x-token": token, "Content-Type": "application/zrok.v1+json", "Accept": "application/json, application/zrok.v1+json"},
+    )
+    with urllib.request.urlopen(req, timeout=30) as r:
+        res = json.load(r)
+    os.makedirs(os.path.join(home, "identities"), exist_ok=True)
+    with open(os.path.join(home, "identities", "environment.json"), "w") as f:
+        f.write(res["cfg"])
+    with open(os.path.join(home, "environment.json"), "w") as f:  # same layout as the zrok2 SDK/CLI
+        json.dump({"zrok_token": token, "ziti_identity": res["identity"], "api_endpoint": api}, f)
 
-    try:
-        root = zroot.Load()
-    except FileNotFoundError:  # SDK quirk: metadata.json without environment.json
-        root = zroot.Default()
-    if not root.IsEnabled():
-        enable(root, token or os.environ["ZROK2_ENABLE_TOKEN"], description="zorek")
-        with open(zroot.metadataFile(), "w") as f:  # SDK enable() omits it; Load() needs it
-            json.dump({"v": zroot.V}, f)
-        root = zroot.Load()
-    ztx, err = openziti.load(root.ZitiIdentityNamed(root.EnvironmentIdentityName()))
+
+def _load_ziti(cfg):
+    """Return a ziti context from the identity in the config, else the saved one, else a freshly enabled one."""
+    import openziti
+
+    home = os.path.join(os.path.expanduser("~"), ".zrok2")
+    ident = os.path.join(home, "identities", "environment.json")
+    if cfg.get("identity"):
+        os.makedirs(os.path.dirname(ident), exist_ok=True)
+        with open(ident, "w") as f:
+            json.dump(cfg["identity"], f)
+    elif not os.path.isfile(ident):
+        _enable(cfg.get("enable_token") or os.environ["ZROK2_ENABLE_TOKEN"], home)
+    ztx, err = openziti.load(ident)
     if err:
         raise RuntimeError(err)
     return ztx
@@ -117,9 +135,10 @@ class Zorek:
     def sync(self):
         """Make the running tunnels match the config file (start new, restart changed/dead, stop removed)."""
         try:
-            token, entries = read_config(self.path)
+            cfg = read_config(self.path)
+            entries = cfg["shares"]
             if self._ztx is None:
-                self._ztx = _load_ziti(token)
+                self._ztx = _load_ziti(cfg)
             self.error = None
         except Exception as e:
             self.error = repr(e)
