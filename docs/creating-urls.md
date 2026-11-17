@@ -5,8 +5,8 @@ forwards to your `ip:port`, and adds it to the config so it is served immediatel
 
 ## The enable token
 
-The enable token (zrok calls it the *account token*) identifies your zrok account. Get it from the zrok web console
-after signing in at the zrok service you use. Treat it like a password: with it anyone can create shares in your
+The enable token (zrok calls it the *account token*) identifies your zrok account. Step-by-step instructions on how to
+get it are in [Get a zrok account and token](getting-started.md). Treat it like a password: with it anyone can create shares in your
 account. Zorek stores it, in plain text, as `enable_token` in `shares.json` so that you only type it once; see
 [Security](security.md).
 

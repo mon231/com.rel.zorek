@@ -49,8 +49,9 @@ Consequences:
 | Permission | Why |
 |------------|-----|
 | `INTERNET` | reach zrok and your targets |
-| `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_DATA_SYNC` | keep the tunnels running in the background |
-| `POST_NOTIFICATIONS` | show the foreground-service notification |
+| `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE` | keep the tunnels running in the background (service mode) |
+| `POST_NOTIFICATIONS` | show the status notification of the foreground service |
+| `RECEIVE_BOOT_COMPLETED` | start service mode after a reboot; only acts if the *Start on boot* switch is on |
 | `MANAGE_EXTERNAL_STORAGE` | **only used if you turn the Downloads import on**; lets Zorek read `shares_*.json` from the public Downloads folder. It grants broad file access, so turn the switch off (and revoke it in system settings) when you are not importing. |
 
 ## Supply chain

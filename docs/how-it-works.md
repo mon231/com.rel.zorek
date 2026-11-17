@@ -103,16 +103,26 @@ Every distinct ziti identity gets one ziti context (one overlay connection), sha
 come from the config are written to `~/.zrok2/identities/zorek-<sha1 prefix>.json` before use. See
 [identity resolution](config.md#identity-resolution).
 
+The context is loaded **inside the tunnel's own thread**, so the sync loop and the UI never wait for it, and a tunnel
+whose identity is still loading reports `connecting`. Loads run **one at a time** (libziti crashed on Android when two
+ran concurrently). Loading the identity of a revoked environment never returns, so it holds that lock; see
+[Troubleshooting](troubleshooting.md#state-connecting-for-a-long-time).
+
 ## Android specifics
 
 - **Python**: [Chaquopy](https://chaquo.com/chaquopy/) 16.1.0 embeds CPython 3.11. The backend directory and the
   vendored `openziti` package are added as Python sources of the app.
 - **Native**: `libziti.so` (ziti-sdk-c 1.18.3) is built with the NDK for three ABIs and packaged as a JNI library, so
   `ctypes` can `dlopen("libziti.so")` by name. The vendored `openziti` has one patch for that.
-- **Process**: `TunnelService` is a foreground service. On start it calls `zorek_backend.start(config, home,
+- **Process**: `TunnelService` is the foreground service of [service mode](android.md#service-mode) (type `specialUse`). On start it calls `zorek_backend.start(config, home,
   import_dir)`, which sets `HOME` to the app's files directory (so `~/.zrok2` is app-private), creates the `Zorek` object
   and starts `run_forever()` in a thread.
-- **UI**: the activity polls `zorek_backend.status()` every 2 seconds and calls `create_url()` on a worker thread.
+- **UI**: a worker thread polls `zorek_backend.status()` every 2 seconds and `create_url()` runs on another one. Python
+  is never called on the UI thread for anything that can wait on the network or on libziti.
+- **Notification**: every 3 seconds the service reads `zorek_backend.status_json()` on its own thread and re-posts the
+  notification only if the text changed. The **Stop** action calls `zorek_backend.stop()` (stops the sync loop and
+  every tunnel) and clears the service-mode and boot flags.
+- **Boot**: `BootReceiver` listens for `BOOT_COMPLETED` and starts the service if the *start on boot* flag is set.
 
 ## What is stored where
 
@@ -122,4 +132,4 @@ come from the config are written to `~/.zrok2/identities/zorek-<sha1 prefix>.jso
 | Imported-files ledger | `shares.json.imported` next to the config |
 | Materialised identities | `~/.zrok2/identities/zorek-*.json` (Android: inside `files/`) |
 | zrok CLI environment (optional, PC) | `~/.zrok2/environment.json` and `identities/environment.json`, owned by the zrok CLI, only read |
-| Switch state (Android) | app preferences, `watch_downloads` |
+| Switch state (Android) | app preferences: `service_mode` (default on), `start_on_boot`, `watch_downloads` |

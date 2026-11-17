@@ -11,6 +11,7 @@ same Python backend.
 
 | I want to... | Go to |
 |--------------|-------|
+| Get a zrok account and my enable token, see my shares, know the free limits | [Get a zrok account](getting-started.md) |
 | Expose a local web server (`localhost:8000`) on a public https URL | [Creating URLs](creating-urls.md) |
 | Expose a device on my LAN (a camera, a NAS, a smart-home hub) through a public URL | [Config reference](config.md) |
 | Run it on my phone so the URLs stay up without a PC | [Android app](android.md) |

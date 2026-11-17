@@ -30,6 +30,8 @@ Windows and Linux. A small tkinter window (no extra GUI dependencies; tkinter sh
 
 ## The window
 
+![The PC window](img/pc-gui.png){ width=560 }
+
 ```
 +------------------------------------------------------------+
 | Tunnels (config is re-read every 2s)                       |
