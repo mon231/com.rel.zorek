@@ -8,3 +8,5 @@ local.properties
 *.apk
 native/docker-build.log
 native/run.log
+site/
+native/work/

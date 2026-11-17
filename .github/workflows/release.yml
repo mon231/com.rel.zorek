@@ -1,0 +1,100 @@
+name: Release
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-latest
+            built: dist/zorek
+            asset: zorek-linux-x64
+          - os: windows-latest
+            built: dist/zorek.exe
+            asset: zorek-windows-x64.exe
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt pyinstaller
+      - name: Backend tests
+        run: python tests/test_core.py
+      - name: Build single-file executable
+        run: pyinstaller desktop/app.py --onefile --name zorek --paths backend --collect-all openziti
+      - name: Name the asset
+        shell: bash
+        run: mv "${{ matrix.built }}" "dist/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Cache libziti
+        id: libziti
+        uses: actions/cache@v4
+        with:
+          path: native/out
+          key: libziti-${{ hashFiles('native/Dockerfile', 'native/build_libziti.sh') }}
+      - name: Build libziti for Android
+        if: steps.libziti.outputs.cache-hit != 'true'
+        run: |
+          docker build -t zorek-native native
+          mkdir -p native/out native/work
+          docker run --rm -v "$PWD/native/work:/work" -v "$PWD/native/out:/out" zorek-native
+      - name: Build unsigned release APK
+        run: >
+          bash ./gradlew assembleRelease
+          -PversionName=${GITHUB_REF_NAME#v}
+          -PversionCode=${{ github.run_number }}
+      - name: Sign APK with signapp
+        run: |
+          pip install signapp
+          # signapp shells out to zipalign and apksigner: use the runner's SDK build-tools
+          export PATH="$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1):$PATH"
+          mkdir -p ~/.reltools
+          unsigned=$(ls app/build/outputs/apk/release/*.apk)
+          signapp -a "$unsigned" -o "zorek-${GITHUB_REF_NAME}.apk"
+          apksigner verify --verbose "zorek-${GITHUB_REF_NAME}.apk"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zorek-apk
+          path: zorek-*.apk
+          if-no-files-found: error
+
+  release:
+    needs: [desktop, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" assets/*
+          --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
