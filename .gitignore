@@ -10,3 +10,4 @@ native/docker-build.log
 native/run.log
 site/
 native/work/
+gradle.log
