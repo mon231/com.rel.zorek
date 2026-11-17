@@ -196,6 +196,7 @@ class Zorek:
         self.tunnels = {}  # public_token -> Tunnel
         self._started = {}  # public_token -> time of last start attempt
         self.error = None
+        self._halt = False
 
     def set_import_dir(self, directory):
         self.import_dir = directory or None
@@ -254,7 +255,13 @@ class Zorek:
              for t, x in self.tunnels.items()}
         return {"error": self.error, "tunnels": s}
 
+    def stop(self):
+        """Stop run_forever() and every tunnel (the config file is left alone)."""
+        self._halt = True
+        for t in list(self.tunnels):
+            self.tunnels.pop(t).stop()
+
     def run_forever(self, interval=2):
-        while True:  # re-reading the small config every tick is the "watch"; it also restarts dead tunnels
+        while not self._halt:  # re-reading the small config every tick is the "watch"; it also restarts dead tunnels
             self.sync()
             time.sleep(interval)

@@ -1,3 +1,4 @@
+import json as _json
 import os as _os
 import threading as _threading
 
@@ -15,9 +16,22 @@ def start(config_path, home, import_dir=None):
         _threading.Thread(target=_z.run_forever, daemon=True).start()
 
 
+def stop():
+    """Android entry: stop all tunnels; start() can be called again afterwards."""
+    global _z
+    if _z:
+        _z.stop()
+        _z = None
+
+
 def set_import_dir(directory):
     if _z:
         _z.set_import_dir(directory)
+
+
+def status_json():
+    """Machine readable status for the notification: {"error", "tunnels": {token: {url, target, state}}}."""
+    return _json.dumps(_z.status() if _z else {"error": None, "tunnels": {}})
 
 
 def status():

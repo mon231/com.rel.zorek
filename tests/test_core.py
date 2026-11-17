@@ -55,6 +55,18 @@ class T(unittest.TestCase):
         self.d = tempfile.mkdtemp()
         self.p = os.path.join(self.d, "shares.json")
 
+    def test_stop(self):
+        ztx = FakeZtx()
+        z = Zorek(self.p, ztx)
+        dump(self.p, [entry("a")])
+        th = threading.Thread(target=z.run_forever, args=(0.05,), daemon=True)
+        th.start()
+        wait(lambda: z.tunnels.get("a") and z.tunnels["a"].alive)
+        z.stop()
+        th.join(5)
+        self.assertFalse(th.is_alive())
+        self.assertEqual(z.tunnels, {})
+
     def test_sync(self):
         ztx = FakeZtx()
         z = Zorek(self.p, ztx)
