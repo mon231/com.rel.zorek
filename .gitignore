@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+native/out/
+native/build.log
+.gradle/
+build/
+local.properties
+*.apk
