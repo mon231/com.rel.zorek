@@ -1,19 +1,15 @@
 name: Release
-# Tag `v*` (or run manually with a version) builds everything and creates a DRAFT release: review and publish it on GitHub.
+# Pushing (or creating on GitHub) a tag `v*` builds everything and creates a DRAFT release with the assets.
+# Review it and publish it on GitHub; publishing it also builds and deploys the docs (docs.yml).
 on:
   push:
     tags: ['v*']
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release tag, e.g. v0.1.0 (created when the draft is published)'
-        required: true
 
 permissions:
   contents: write
 
 env:
-  TAG: ${{ inputs.version || github.ref_name }}
+  TAG: ${{ github.ref_name }}
 
 jobs:
   desktop:
@@ -105,6 +101,11 @@ jobs:
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release create "$TAG" assets/*
-          --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TAG" --generate-notes --draft
+        run: |
+          # re-running the workflow for the same tag refreshes the assets of the existing release
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$TAG" assets/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" assets/* --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "$TAG" --generate-notes --draft
+          fi

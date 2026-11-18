@@ -68,16 +68,20 @@ PC and Android.
 |----------|---------|--------------|
 | `build.yml` | every push / PR | backend tests, then builds the debug APK (libziti is cached on the hash of `native/`) |
 | `desktop.yml` | every push / PR | tests, then a PyInstaller GUI binary on Linux and Windows |
-| `docs.yml` | push to `main` | builds this site with `mkdocs build --strict`; deploys to GitHub Pages on `main` |
-| `release.yml` | tag `v*`, or manual run | builds APK + desktop binaries and creates a **draft** release |
+| `release.yml` | tag `v*` pushed or created | builds APK + desktop binaries and creates a **draft** release with them |
+| `docs.yml` | a release is **published** | builds this site with `mkdocs build --strict` from the release's tag and deploys it to GitHub Pages |
 
 ### Releasing
 
 1. Make sure `main` is green.
-2. Run the **Release** workflow manually (Actions tab, *Run workflow*) with a version such as `v0.1.0`, or push a tag
-   `v0.1.0`.
+2. Create the tag on the commit to release and push it: `git tag v0.1.1 && git push origin v0.1.1` (creating the tag in
+   the GitHub UI works too). The **Release** workflow builds everything and creates the **draft** release `v0.1.1`.
+   Re-running the workflow for the same tag refreshes the assets of that release.
 3. Open the draft release on GitHub, check the assets (APK, `zorek-linux-x64`, `zorek-windows-x64.exe`), edit the notes
-   and publish. Publishing a draft created from a manual run also creates the tag.
+   and **publish**. Publishing triggers the **Docs** workflow, which builds and deploys the site from that tag.
+
+Docs are therefore never published from branches or drafts: the site always matches the latest published release. The
+`github-pages` environment must allow deployments from tags `v*` (Settings, Environments).
 
 The APK is signed with [`signapp`](https://pypi.org/project/signapp/) using its built-in keystore, so every release is
 signed with the same key and updates install in place.
