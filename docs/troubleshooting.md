@@ -17,6 +17,14 @@ The frontend found no one serving the share.
 - The same share is bound on another device: stop it there.
 - Just started? Give it 5-10 seconds after the first `listening`.
 
+## State: `connecting` for a long time
+
+The tunnel thread is still loading its ziti identity. Identities are loaded **one at a time**, and loading the identity of
+an environment that was **disabled or deleted** in zrok never finishes: it blocks, silently, and every tunnel behind it
+shows `connecting` (the app itself stays responsive). Find the share whose environment you deleted (the zrok console
+shows which environments exist) and remove its entry, or put the identity of a live environment on it. The rest start
+by themselves once the entry is gone and the app is restarted.
+
 ## State: `cannot reach 10.0.0.5:80: ...`
 
 The tunnel is fine; the **target** refused or timed out when a visitor arrived.
@@ -43,8 +51,9 @@ account; delete it in the zrok console.
 
 ## Android: nothing happens / tunnels stop
 
-- No notification = service not running: open the app. After a reboot the app must be opened once.
-- Tunnels die after a while: exclude the app from battery optimisation (see [Android app](android.md#staying-alive)).
+- No notification = service mode is off (or you pressed **Stop**): open the app and turn *Service mode* on.
+- Nothing after a reboot: turn on *Start service mode on boot*; some vendors also need *auto-start* allowed for Zorek (see [Android app](android.md#start-on-boot)).
+- Tunnels die after a while: exclude the app from battery optimisation (see [Android app](android.md#start-on-boot)).
 - Stuck on "starting...": check `adb logcat -s python.stderr AndroidRuntime`.
 - The phone must reach the target: a LAN device needs the phone on that Wi-Fi.
 

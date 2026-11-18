@@ -11,11 +11,10 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
-import android.os.Handler
-import android.os.Looper
 import android.provider.Settings
 import android.text.InputType
 import android.view.Gravity
+import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
@@ -24,6 +23,7 @@ import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
 import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
 import java.io.File
 
 class MainActivity : Activity() {
@@ -37,9 +37,22 @@ class MainActivity : Activity() {
             else null
 
         fun backend() = Python.getInstance().getModule("zorek_backend")
+
+        fun prefs(c: Context) = c.getSharedPreferences("zorek", MODE_PRIVATE)
+
+        /** Service mode: tunnels run in a foreground service (with a status notification), also with the app closed. */
+        fun serviceMode(c: Context) = prefs(c).getBoolean("service_mode", true)
+
+        fun startOnBoot(c: Context) = prefs(c).getBoolean("start_on_boot", false)
+
+        /** Starts Python and the tunnel backend once per process. */
+        @Synchronized
+        fun ensureBackend(c: Context) {
+            if (!Python.isStarted()) Python.start(AndroidPlatform(c))
+            backend().callAttr("start", configFile(c).absolutePath, c.filesDir.absolutePath, importDir(c))
+        }
     }
 
-    private val ui = Handler(Looper.getMainLooper())
 
     private fun field(hint: String, type: Int = InputType.TYPE_CLASS_TEXT, text: String = "") =
         EditText(this).apply { this.hint = hint; inputType = type; setText(text); setSingleLine() }
@@ -85,6 +98,49 @@ class MainActivity : Activity() {
             }
         }
 
+        fun openUrl(u: String) = startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(u)))
+        val help = TextView(this).apply {
+            text = "No token yet? Sign up free at myzrok.io, click the zrok icon in the sidebar, then " +
+                "\"CLICK HERE TO GET STARTED!\" and copy the account token from step 2."
+            textSize = 13f
+        }
+        val consoleBtn = Button(this).apply {
+            text = "Open zrok console (token, environments, shares)"
+            setOnClickListener { openUrl("https://api-v2.zrok.io/") }
+        }
+
+        // --- service mode / boot ---------------------------------------------------------------------------------
+        var syncing = false
+        val svc = Switch(this).apply { text = "Service mode (keep tunnels running, status notification)" }
+        val boot = Switch(this).apply { text = "Start service mode on boot" }
+        fun syncSwitches() {
+            syncing = true
+            svc.isChecked = serviceMode(this@MainActivity)
+            boot.isChecked = startOnBoot(this@MainActivity)
+            syncing = false
+        }
+        svc.setOnCheckedChangeListener { _, on ->
+            if (syncing) return@setOnCheckedChangeListener
+            prefs.edit().putBoolean("service_mode", on).apply()
+            if (on) startForegroundService(Intent(this, TunnelService::class.java))
+            else {  // tunnels keep running while the app process lives, the notification goes away
+                stopService(Intent(this, TunnelService::class.java))
+                prefs.edit().putBoolean("start_on_boot", false).apply()
+                syncSwitches()
+            }
+        }
+        boot.setOnCheckedChangeListener { _, on ->
+            if (syncing) return@setOnCheckedChangeListener
+            prefs.edit().putBoolean("start_on_boot", on).apply()
+            if (on && !serviceMode(this)) {
+                prefs.edit().putBoolean("service_mode", true).apply()
+                startForegroundService(Intent(this, TunnelService::class.java))
+                syncSwitches()
+            }
+        }
+        syncSwitches()
+        resync = ::syncSwitches
+
         // --- Downloads watch -------------------------------------------------------------------------------------
         val watch = Switch(this).apply {
             text = "Import shares_*.json from Downloads"
@@ -115,26 +171,45 @@ class MainActivity : Activity() {
         }
         reloadEditor = { edit.setText(cfg.readText()) }
 
+        @Suppress("DEPRECATION") window.decorView.run { systemUiVisibility = systemUiVisibility or View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR }
+        actionBar?.hide()  // edge-to-edge (targetSdk 35): the bar would cover the top of the page
         setContentView(ScrollView(this).apply {
+            fitsSystemWindows = true  // keep clear of the status and navigation bars
             addView(LinearLayout(this@MainActivity).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(32, 48, 32, 32)
+                addView(TextView(this@MainActivity).apply { text = "Zorek"; textSize = 26f })
                 addView(title("Tunnels")); addView(status)
+                addView(title("Background"))
+                addView(svc); addView(boot)
                 addView(title("New public URL"))
-                listOf(token, ip, port, name, https, create, result).forEach { addView(it) }
+                listOf(help, consoleBtn, token, ip, port, name, https, create, result).forEach { addView(it) }
                 addView(title("Folder import")); addView(watch)
                 addView(title("Config (shares.json)")); addView(edit); addView(save)
             })
         })
 
-        startForegroundService(Intent(this, TunnelService::class.java))
-        object : Runnable {
-            override fun run() {
-                status.text = if (Python.isStarted()) backend().callAttr("status").toString() else "starting..."
-                ui.postDelayed(this, 2000)
+        if (serviceMode(this)) startForegroundService(Intent(this, TunnelService::class.java)) else ensureBackend(this)
+        // Python can block (broken identity while libziti loads): poll on a worker thread, never on the UI thread
+        Thread {
+            while (!isDestroyed) {
+                val text = try {
+                    if (Python.isStarted()) backend().callAttr("status").toString() else "starting..."
+                } catch (e: Exception) {
+                    "status failed: ${e.message}"
+                }
+                runOnUiThread { status.text = text }
+                Thread.sleep(2000)
             }
-        }.run()
+        }.start()
     }
 
     private var reloadEditor: () -> Unit = {}
+    private var resync: () -> Unit = {}
+
+    /** The notification's Stop button changes the switches while the app is in the background. */
+    override fun onResume() {
+        super.onResume()
+        resync()
+    }
 }

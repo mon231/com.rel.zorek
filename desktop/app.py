@@ -34,7 +34,7 @@ def run_gui(z):
         pass
     root = tk.Tk()
     root.title("Zorek")
-    root.geometry("760x520")
+    root.geometry("800x700")
     pad = {"padx": 8, "pady": 4}
 
     # --- tunnels -------------------------------------------------------------------------------------------------

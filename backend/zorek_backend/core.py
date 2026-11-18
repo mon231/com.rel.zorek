@@ -126,13 +126,15 @@ def _spec(entry):
 class Tunnel:
     """One public share token -> ip:port. Runs in a daemon thread until stop()."""
 
-    def __init__(self, ztx, entry):
+    def __init__(self, get_ztx, entry):
+        """get_ztx() runs in the tunnel thread: loading a ziti identity can block for ever (revoked identity)."""
         self.entry = entry
         self.spec = _spec(entry)
         self.error = None
         self.stopped = False
         self.srv = None
-        self._ztx = ztx
+        self.listening = False
+        self._get_ztx = get_ztx
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
 
@@ -160,8 +162,9 @@ class Tunnel:
         tls = ssl.create_default_context()
         tls.check_hostname, tls.verify_mode = False, ssl.CERT_NONE  # LAN devices are usually self-signed
         try:
-            self.srv = self._ztx.bind(self.entry["public_token"])
+            self.srv = self._get_ztx().bind(self.entry["public_token"])
             self.srv.listen()
+            self.listening = True
             self._log("listening")
             while not self.stopped:
                 try:
@@ -193,9 +196,13 @@ class Zorek:
         self.import_dir = import_dir
         self._injected = ztx  # tests inject a fake ziti context
         self._ctx = {}  # identity file path -> ziti context
+        # libziti crashed (SIGSEGV on Android) when identities were loaded concurrently: one load at a time.
+        # shortcut: a revoked identity makes openziti.load() block for ever and so holds this lock; remove it from the config
+        self._load_lock = threading.Lock()
         self.tunnels = {}  # public_token -> Tunnel
         self._started = {}  # public_token -> time of last start attempt
         self.error = None
+        self._halt = False
 
     def set_import_dir(self, directory):
         self.import_dir = directory or None
@@ -215,11 +222,12 @@ class Zorek:
                     f.write(blob)
         else:
             path = os.path.join(_zrok_home(), "identities", "environment.json")  # the zrok CLI/SDK environment
-        if path not in self._ctx:
-            ztx, err = openziti.load(path)
-            if err:
-                raise RuntimeError(err)
-            self._ctx[path] = ztx
+        with self._load_lock:
+            if path not in self._ctx:
+                ztx, err = openziti.load(path)
+                if err:
+                    raise RuntimeError(err)
+                self._ctx[path] = ztx
         return self._ctx[path]
 
     def sync(self):
@@ -243,18 +251,21 @@ class Zorek:
             elif cur and time.time() - self._started[t] < RETRY_SECONDS:
                 continue  # died recently: back off
             self._started[t] = time.time()
-            try:
-                self.tunnels[t] = Tunnel(self._ztx_for(e, cfg), e)
-            except Exception as ex:  # e.g. missing identity file
-                self.error = f"{t}: {ex!r}"
+            self.tunnels[t] = Tunnel(lambda e=e, cfg=cfg: self._ztx_for(e, cfg), e)
 
     def status(self):
         s = {t: {"url": x.entry.get("public_url", t), "target": "{2}://{0}:{1}".format(*x.spec),
-                 "state": "running" if x.alive and not x.error else x.error or "stopped"}
+                 "state": x.error or ("running" if x.listening else "connecting" if x.alive else "stopped")}
              for t, x in self.tunnels.items()}
         return {"error": self.error, "tunnels": s}
 
+    def stop(self):
+        """Stop run_forever() and every tunnel (the config file is left alone)."""
+        self._halt = True
+        for t in list(self.tunnels):
+            self.tunnels.pop(t).stop()
+
     def run_forever(self, interval=2):
-        while True:  # re-reading the small config every tick is the "watch"; it also restarts dead tunnels
+        while not self._halt:  # re-reading the small config every tick is the "watch"; it also restarts dead tunnels
             self.sync()
             time.sleep(interval)

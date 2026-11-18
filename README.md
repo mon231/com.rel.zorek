@@ -7,7 +7,10 @@ tunnels are started, changed, stopped and restarted live.
 **Documentation: https://mon231.github.io/com.rel.zorek/**
 
 - Create a new public URL from your zrok enable token (GUI button / app form), on the same URL forever.
-- Android: foreground service, Downloads watch that imports `shares_*.json` files (feature flag).
+- Android: service mode with a live status notification, start on boot, and a Downloads watch that imports
+  `shares_*.json` files (all three are flags).
+- New to zrok? [Get an account and token](https://mon231.github.io/com.rel.zorek/getting-started/); the free service allows
+  about 5 GB per day.
 - Works for local servers and for any `ip:port` on your LAN, `http` or `https` targets.
 
 ## Quick start
